@@ -1,0 +1,13 @@
+{
+  "name": "tg-bot",
+  "version": "1.0.0",
+  "description": "Private DNS Demo — Telegram Bot",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "grammy": "^1.22.2",
+    "node-fetch": "^3.3.2"
+  }
+}

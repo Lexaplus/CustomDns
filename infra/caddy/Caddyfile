@@ -1,0 +1,38 @@
+# Caddy reverse proxy — only active when started with --profile tls
+# Requires DNS_DOMAIN to be set in .env
+
+{DNS_DOMAIN} {
+    # Reverse proxy to AdGuard Home web UI
+    reverse_proxy adguard:3000
+
+    # HTTP Basic Auth — add your username:password hash here
+    # Generate with: caddy hash-password --plaintext yourpassword
+    basicauth /* {
+        admin $2a$14$placeholder_caddy_hash
+    }
+
+    # Only allow admin IPs (handled by UFW; this is an extra layer)
+    @blocked not remote_ip {$ADMIN_IPS}
+    respond @blocked "Forbidden" 403
+
+    # TLS handled automatically by Caddy via Let's Encrypt
+    tls {
+        protocols tls1.2 tls1.3
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+    }
+
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+        format json
+    }
+}
