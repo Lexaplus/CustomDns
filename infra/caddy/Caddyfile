@@ -13,10 +13,8 @@
         reverse_proxy adguard:3000
     }
 
-    # ── TLS via Let's Encrypt (automatic) ────────────────────
-    tls {
-        protocols tls1.2 tls1.3
-    }
+    # ── TLS via Caddy internal CA (self-signed, no domain needed) ─
+    tls internal
 
     # ── Security headers ─────────────────────────────────────
     header {
