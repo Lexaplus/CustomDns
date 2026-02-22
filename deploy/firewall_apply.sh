@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # deploy/firewall_apply.sh
-# Applies UFW firewall rules for the private-dns-demo stack.
+# Applies firewall rules for the private-dns-demo stack.
 #
 # Usage:
 #   firewall_apply.sh bootstrap   — full reset: SSH, admin UIs, then DNS rules
 #   firewall_apply.sh update      — only refresh DNS/port-53 rules
 #
-# Environment (read from /opt/private-dns-demo/infra/.env):
-#   ADMIN_IPS   — comma-separated IPs always allowed for SSH + admin UIs
+# Port 53 is controlled via the iptables DOCKER-USER chain (not UFW) because
+# Docker publishes ports by inserting iptables rules that bypass UFW's INPUT chain.
+# DOCKER-USER is the correct chain for filtering Docker-forwarded traffic.
 #
 # Locking: uses /deploy/firewall.lock (flock) so only one instance runs at a time.
 
@@ -27,37 +28,51 @@ die() { echo "[ERROR] $*" >&2; exit 1; }
 # ── Load ADMIN_IPS from .env ─────────────────────────────────
 load_admin_ips() {
   if [[ -f "$ENV_FILE" ]]; then
-    # shellcheck disable=SC1090
     ADMIN_IPS_RAW=$(grep -E '^ADMIN_IPS=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
   fi
   ADMIN_IPS="${ADMIN_IPS_RAW:-${ADMIN_IPS:-}}"
 
   if [[ -z "$ADMIN_IPS" ]]; then
-    die "ADMIN_IPS is not set. Set it in infra/.env or as an environment variable to prevent SSH lockout."
+    die "ADMIN_IPS is not set. Set it in infra/.env to prevent SSH lockout."
   fi
 }
 
-# ── Strip all existing port-53 rules (by number, in reverse) ─
-strip_port53_rules() {
-  log "Stripping existing port-53 rules..."
-  # Collect rule numbers in reverse order to avoid index shifting
-  mapfile -t RULE_NUMS < <(
-    ufw status numbered 2>/dev/null \
-      | grep -E '53/' \
-      | awk -F'[][]' '{print $2}' \
-      | sort -rn
-  )
+# ── DOCKER-USER chain: flush all port-53 rules ───────────────
+flush_docker_dns_rules() {
+  log "Flushing DOCKER-USER port-53 rules..."
+  # Ensure chain exists (Docker creates it on first run)
+  iptables -N DOCKER-USER 2>/dev/null || true
 
-  for num in "${RULE_NUMS[@]}"; do
-    log "  Deleting rule #${num}"
-    ufw --force delete "$num" 2>/dev/null || true
+  # Remove all rules matching port 53 in DOCKER-USER (iterate in reverse)
+  while iptables -L DOCKER-USER --line-numbers -n 2>/dev/null | grep -qE 'dpt:53|dports 53'; do
+    LINENUM=$(iptables -L DOCKER-USER --line-numbers -n 2>/dev/null \
+      | grep -E 'dpt:53|dports 53' | head -1 | awk '{print $1}')
+    [[ -z "$LINENUM" ]] && break
+    iptables -D DOCKER-USER "$LINENUM" 2>/dev/null || break
   done
+
+  # Same for udp
+  while iptables -L DOCKER-USER --line-numbers -n 2>/dev/null | grep -qE 'udp.*dpt:53'; do
+    LINENUM=$(iptables -L DOCKER-USER --line-numbers -n 2>/dev/null \
+      | grep -E 'udp.*dpt:53' | head -1 | awk '{print $1}')
+    [[ -z "$LINENUM" ]] && break
+    iptables -D DOCKER-USER "$LINENUM" 2>/dev/null || break
+  done
+
+  log "DOCKER-USER port-53 rules cleared"
 }
 
-# ── Add DNS rules from allowlist.txt ─────────────────────────
-add_dns_rules() {
+# ── DOCKER-USER chain: add allowlist + default DROP for 53 ───
+apply_docker_dns_rules() {
+  log "Applying DOCKER-USER port-53 rules..."
+
+  # First add the default DROP rules at the END (we'll insert ALLOWs before them)
+  iptables -A DOCKER-USER -p tcp --dport 53 -j DROP
+  iptables -A DOCKER-USER -p udp --dport 53 -j DROP
+  log "  Default DROP for port 53 added"
+
   if [[ ! -f "$ALLOWLIST" ]]; then
-    log "No allowlist.txt found at ${ALLOWLIST} — skipping DNS rules"
+    log "No allowlist.txt — port 53 blocked for all IPs"
     return
   fi
 
@@ -66,12 +81,13 @@ add_dns_rules() {
     ip="${ip// /}"
     [[ -z "$ip" || "$ip" == \#* ]] && continue
     log "  Allowing 53/tcp+udp from ${ip}"
-    ufw allow from "$ip" to any port 53 proto tcp comment "dns-allowlist"
-    ufw allow from "$ip" to any port 53 proto udp comment "dns-allowlist"
+    # Insert RETURN rules BEFORE the DROP rules (at position 1)
+    iptables -I DOCKER-USER 1 -p udp --dport 53 -s "$ip" -j RETURN
+    iptables -I DOCKER-USER 1 -p tcp --dport 53 -s "$ip" -j RETURN
     (( count++ )) || true
   done < "$ALLOWLIST"
 
-  log "Added DNS rules for ${count} IPs"
+  log "Added DNS ALLOW rules for ${count} IPs"
 }
 
 # ── Bootstrap: full UFW setup ────────────────────────────────
@@ -83,7 +99,7 @@ do_bootstrap() {
   ufw default deny incoming
   ufw default allow outgoing
 
-  # SSH + admin UI from ADMIN_IPS only
+  # SSH + admin UIs from ADMIN_IPS only (UFW handles non-Docker ports fine)
   IFS=',' read -ra ADMINS <<< "$ADMIN_IPS"
   for ip in "${ADMINS[@]}"; do
     ip="${ip// /}"
@@ -96,19 +112,21 @@ do_bootstrap() {
     ufw allow from "$ip" to any port 9090 proto tcp comment "prometheus"
   done
 
-  add_dns_rules
-
   ufw --force enable
   log "UFW bootstrap complete"
   ufw status verbose
+
+  # Apply DOCKER-USER port-53 rules
+  flush_docker_dns_rules
+  apply_docker_dns_rules
 }
 
 # ── Update: refresh port-53 rules only ───────────────────────
 do_update() {
-  log "Update mode: refreshing port-53 rules only"
-  strip_port53_rules
-  add_dns_rules
-  log "UFW update complete"
+  log "Update mode: refreshing port-53 rules only (DOCKER-USER chain)"
+  flush_docker_dns_rules
+  apply_docker_dns_rules
+  log "Update complete"
 }
 
 # ── Main (with flock) ────────────────────────────────────────
@@ -120,7 +138,6 @@ main() {
   esac
 }
 
-# Acquire exclusive lock and run
 (
   flock -x -w 30 200 || die "Could not acquire firewall lock after 30s"
   main
