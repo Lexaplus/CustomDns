@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/YOUR_ORG/private-dns-demo.git"   # update before use
+REPO_URL="https://github.com/Lexaplus/CustomDns.git"
 REPO_DIR="/opt/private-dns-demo"
 INFRA_DIR="${REPO_DIR}/infra"
 DEPLOY_DIR="${REPO_DIR}/deploy"
