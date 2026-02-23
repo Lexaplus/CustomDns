@@ -216,12 +216,13 @@
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab(event,'win')">Windows 11</button>
+      <button class="tab" onclick="switchTab(event,'win10')">Windows 10</button>
       <button class="tab" onclick="switchTab(event,'mac')">macOS</button>
       <button class="tab" onclick="switchTab(event,'linux')">Linux</button>
       <button class="tab" onclick="switchTab(event,'mobile')">Android / iOS</button>
     </div>
 
-    <!-- Windows -->
+    <!-- Windows 11 -->
     <div id="win" class="tab-panel active">
       <div class="code-wrap">
         <div class="code-label">PowerShell — run as Administrator</div>
@@ -237,6 +238,31 @@
       <p style="margin-top:8px">To undo everything:</p>
       <div class="code-wrap">
         <pre><code>.\windows-doh-setup.ps1 -Uninstall</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+    </div>
+
+    <!-- Windows 10 -->
+    <div id="win10" class="tab-panel">
+      <div class="alert">
+        <strong>Note:</strong> Windows 10 does not support built-in DNS-over-HTTPS (DoH).
+        This script configures plain DNS (port 53). Your queries are not encrypted,
+        but access is still restricted to allowlisted IPs. For encrypted DoH, upgrade to Windows 11.
+      </div>
+      <div class="code-wrap">
+        <div class="code-label">PowerShell — run as Administrator</div>
+        <pre><code>irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows10-dns-setup.ps1 | iex</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p>This command: installs the server certificate and sets DNS to 159.89.25.145 on all active adapters.</p>
+      <p style="margin-top:4px">If execution policy blocks it:</p>
+      <div class="code-wrap">
+        <pre><code>powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows10-dns-setup.ps1 | iex"</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p style="margin-top:8px">To undo everything:</p>
+      <div class="code-wrap">
+        <pre><code>.\windows10-dns-setup.ps1 -Uninstall</code></pre>
         <button class="copy-btn" onclick="copy(this)">Copy</button>
       </div>
     </div>
@@ -306,6 +332,7 @@ resolvectl flush-caches</code></pre>
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab(event,'vwin')">Windows 11</button>
+      <button class="tab" onclick="switchTab(event,'vwin10')">Windows 10</button>
       <button class="tab" onclick="switchTab(event,'vother')">macOS / Linux</button>
     </div>
 
@@ -317,6 +344,15 @@ resolvectl flush-caches</code></pre>
       </div>
     </div>
 
+    <div id="vwin10" class="tab-panel">
+      <div class="code-wrap">
+        <div class="code-label">Command Prompt or PowerShell</div>
+        <pre><code>nslookup google.com 159.89.25.145</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p>You should see a non-<code style="color:var(--accent)">198.18.x.x</code> address in the answer. If it times out or returns <code style="color:var(--accent)">198.18.x.x</code>, your IP is not yet on the allowlist.</p>
+    </div>
+
     <div id="vother" class="tab-panel">
       <div class="code-wrap">
         <div class="code-label">Terminal</div>
@@ -326,7 +362,7 @@ resolvectl flush-caches</code></pre>
       <p>You should see an <code style="color:var(--accent2)">ANSWER SECTION</code> with a real IP. If it times out, your IP is not yet on the allowlist.</p>
     </div>
 
-    <p style="margin-top:16px">The Windows script checks:</p>
+    <p style="margin-top:16px">The Windows 11 script checks:</p>
     <ul class="checks">
       <li><span class="icon">&#x2705;</span><div><strong>DNS adapter config</strong><br><span class="desc">159.89.25.145 set on your active network adapter</span></div></li>
       <li><span class="icon">&#x2705;</span><div><strong>Trusted Root certificate</strong><br><span class="desc">Self-signed cert installed in LocalMachine\Root store</span></div></li>
@@ -374,7 +410,14 @@ resolvectl flush-caches</code></pre>
         <span class="icon">&#x21A9;&#xFE0F;</span>
         <div>
           <strong>Want to uninstall</strong><br>
-          <span class="desc">Run <code style="color:var(--accent)">.\windows-doh-setup.ps1 -Uninstall</code> as Administrator to revert all changes.</span>
+          <span class="desc">Run <code style="color:var(--accent)">.\windows-doh-setup.ps1 -Uninstall</code> (Win 11) or <code style="color:var(--accent)">.\windows10-dns-setup.ps1 -Uninstall</code> (Win 10) as Administrator to revert all changes.</span>
+        </div>
+      </li>
+      <li>
+        <span class="icon">&#x1F4BB;</span>
+        <div>
+          <strong>Using Windows 10?</strong><br>
+          <span class="desc">The Windows 11 script will fail on Windows 10 because DoH template registration is not supported. Use the <strong>Windows 10</strong> tab in Step 1 instead — it sets up plain DNS (port 53) which works on all Windows versions.</span>
         </div>
       </li>
     </ul>
