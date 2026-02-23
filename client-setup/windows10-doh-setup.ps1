@@ -297,10 +297,12 @@ if ($svcExisting) {
     $null = & "$InstallDir\dnscrypt-proxy.exe" -config $configPath -service uninstall 2>&1
 }
 
-# Install the service (dnscrypt-proxy may return non-zero even on success; capture and ignore)
-$null = & "$InstallDir\dnscrypt-proxy.exe" -config $configPath -service install 2>&1
+# Install the service — dnscrypt-proxy exits non-zero even on success, so catch the error
+try {
+    $null = & "$InstallDir\dnscrypt-proxy.exe" -config $configPath -service install 2>&1
+} catch { <# non-zero exit is normal here; the NOTICE message confirms success #> }
 
-# Start via PowerShell cmdlet — avoids NativeCommandError from -service start flag
+# Start via PowerShell cmdlet — more reliable than the -service start flag
 Start-Service -Name $ServiceName -ErrorAction Stop
 Write-Ok "Service '$ServiceName' installed and started"
 
