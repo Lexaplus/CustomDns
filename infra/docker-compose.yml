@@ -48,10 +48,12 @@ services:
     ports:
       - "53:53/tcp"
       - "53:53/udp"
-      - "3000:3000/tcp"  # Web UI
+      - "3000:3000/tcp"   # Web UI
+      - "8443:8443/tcp"   # DoH / DoT (HTTPS)
     volumes:
       - adguard-work:/opt/adguardhome/work
       - ./adguard/conf:/opt/adguardhome/conf
+      - ./adguard/certs:/opt/adguardhome/certs:ro
     environment:
       TZ: ${TZ:-UTC}
     healthcheck:

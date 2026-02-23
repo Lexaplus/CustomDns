@@ -19,6 +19,7 @@ TEST_IP=""
 # ── Helpers ──────────────────────────────────────────────────
 pass() { echo -e "\033[1;32m[PASS]\033[0m $*"; (( PASS++ )) || true; }
 fail() { echo -e "\033[1;31m[FAIL]\033[0m $*"; (( FAIL++ )) || true; }
+warn() { echo -e "\033[1;33m[WARN]\033[0m $*"; }
 info() { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 check_cmd() { command -v "$1" &>/dev/null || { fail "Required: $1 not found"; exit 1; }; }
 
@@ -105,9 +106,21 @@ else
   fail "Grafana UI not reachable (HTTP ${GF_STATUS})"
 fi
 
-# ── Test 9: Remove test IP ───────────────────────────────────
+# ── Test 9: DoH endpoint reachable ───────────────────────────
+info "9. DoH endpoint (port 8443)"
+DOH_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" \
+  "https://${SERVER_IP}:8443/dns-query?dns=AAABAAABAAAAAAAAA3d3dwZnb29nbGUDY29tAAABAAE" \
+  -H "accept: application/dns-message" 2>&1)
+# AdGuard returns 200 for valid DoH requests; 4xx if blocked/malformed
+if [[ "$DOH_STATUS" =~ ^(200|400|403)$ ]]; then
+  pass "DoH endpoint reachable at https://${SERVER_IP}:8443/dns-query (HTTP ${DOH_STATUS})"
+else
+  fail "DoH endpoint not reachable (HTTP ${DOH_STATUS}) — check port 8443 and TLS cert"
+fi
+
+# ── Test 10: Remove test IP ───────────────────────────────────
 if [[ -n "${RECORD_ID:-}" ]]; then
-  info "9. DELETE /allowed-ips/${RECORD_ID}"
+  info "10. DELETE /allowed-ips/${RECORD_ID}"
   DEL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
     -X DELETE \
     -H "x-admin-token: ${TOKEN}" \

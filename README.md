@@ -12,11 +12,12 @@ A production-quality **Private DNS service** deployable on a single Ubuntu VPS w
                         ┌─────────────────────────────────────────────────┐
                         │                  Ubuntu VPS                      │
                         │                                                  │
-  Client (DNS)          │  ┌──────────────┐    ┌───────────────────────┐  │
+  Client (DNS/DoH)      │  ┌──────────────┐    ┌───────────────────────┐  │
   ──────────────:53────►│  │ AdGuard Home │    │       admin-api       │  │
   (UDP/TCP)             │  │   :53        │    │  NestJS + TypeORM     │  │
-                        │  │   :3000 UI   │    │       :8080           │  │
-  Telegram Bot          │  └──────────────┘    └──────────┬────────────┘  │
+  ──────────────:8443──►│  │   :8443 DoH  │    │       :8080           │  │
+  (HTTPS/DoH)           │  │   :3000 UI   │    └──────────┬────────────┘  │
+  Telegram Bot          │  └──────────────┘               │               │
   ──────────────────────►  ┌──────────────┐               │               │
                         │  │   tg-bot     │───────────────┘               │
                         │  │  (grammy)    │    ┌───────────────────────┐  │
@@ -33,6 +34,7 @@ A production-quality **Private DNS service** deployable on a single Ubuntu VPS w
                         │  │ UFW Firewall                              │   │
                         │  │  :22   — admin IPs only                  │   │
                         │  │  :53   — allowlisted client IPs only     │   │
+                        │  │  :8443 — allowlisted client IPs only     │   │
                         │  │  :3000/:3001/:8080 — admin IPs only      │   │
                         │  └──────────────────────────────────────────┘   │
                         └─────────────────────────────────────────────────┘
@@ -112,7 +114,8 @@ Copy `infra/.env.example` to `infra/.env` and fill in all values.
 | Admin REST API | `http://SERVER_IP:8080` | Protected by `x-admin-token` |
 | Grafana | `http://SERVER_IP:3001` | DNS Overview dashboard |
 | Prometheus | `http://127.0.0.1:9090` | Localhost only |
-| DNS endpoint | `SERVER_IP:53` | UDP/TCP; allowlisted IPs only |
+| DNS (plain) | `SERVER_IP:53` | UDP/TCP; allowlisted IPs only |
+| DNS-over-HTTPS | `https://SERVER_IP:8443/dns-query` | Self-signed cert; allowlisted IPs only |
 
 ---
 
@@ -179,7 +182,20 @@ resolvectl dns eth0 159.89.25.145
 resolvectl flush-caches
 ```
 
-**Windows (PowerShell, admin):**
+**Windows 11 — one-click DoH setup (recommended):**
+```powershell
+# Run as Administrator — installs the self-signed cert, registers DoH template,
+# and sets DNS on all active adapters
+.\client-setup\windows-doh-setup.ps1
+
+# To revert everything
+.\client-setup\windows-doh-setup.ps1 -Uninstall
+```
+The script auto-fetches the server certificate from port 8443 at runtime, or you
+can embed it as base64 in `$CERT_B64` for a fully offline installer (the cert
+base64 is printed by `bootstrap.sh` after cert generation).
+
+**Windows (plain UDP/TCP, no cert needed):**
 ```powershell
 Set-DnsClientServerAddress -InterfaceAlias "Wi-Fi" -ServerAddresses 159.89.25.145
 ```
@@ -237,6 +253,8 @@ Use this checklist to run a live demo:
 [ ] 3. Show DNS works from your laptop:
        $ dig google.com @159.89.25.145
        → Should return ANSWER SECTION
+       (Windows) Run client-setup\windows-doh-setup.ps1 as Admin
+       → Should print "OK DoH configured" with a real Google IP
 
 [ ] 4. Show Telegram bot:
        → /listip  (shows your IP)
@@ -280,6 +298,8 @@ private-dns-demo/
 │   └── Dockerfile
 ├── tg-bot/                   # grammy-based Telegram bot (ESM)
 │   └── Dockerfile
+├── client-setup/
+│   └── windows-doh-setup.ps1 # One-click Windows 11 DoH configurator
 └── README.md
 ```
 
@@ -287,7 +307,7 @@ private-dns-demo/
 
 ## Security Notes
 
-- Port 53 is **closed** by UFW until at least one IP is added to the allowlist
+- Ports 53 and 8443 (DoH) are **closed** by iptables DOCKER-USER chain until at least one IP is added to the allowlist
 - SSH (port 22) is restricted to `ADMIN_IPS` only — set this before running bootstrap
 - AdGuard setup wizard is disabled via pre-seeded `AdGuardHome.yaml`
 - All secrets come from `.env` — never committed

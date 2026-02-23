@@ -37,42 +37,46 @@ load_admin_ips() {
   fi
 }
 
-# ── DOCKER-USER chain: flush all port-53 rules ───────────────
+# ── DOCKER-USER chain: flush all port-53 and port-8443 rules ─
 flush_docker_dns_rules() {
-  log "Flushing DOCKER-USER port-53 rules..."
+  log "Flushing DOCKER-USER port-53 / port-8443 rules..."
   # Ensure chain exists (Docker creates it on first run)
   iptables -N DOCKER-USER 2>/dev/null || true
 
-  # Remove all rules matching port 53 in DOCKER-USER (iterate in reverse)
-  while iptables -L DOCKER-USER --line-numbers -n 2>/dev/null | grep -qE 'dpt:53|dports 53'; do
-    LINENUM=$(iptables -L DOCKER-USER --line-numbers -n 2>/dev/null \
-      | grep -E 'dpt:53|dports 53' | head -1 | awk '{print $1}')
-    [[ -z "$LINENUM" ]] && break
-    iptables -D DOCKER-USER "$LINENUM" 2>/dev/null || break
+  for PORT in 53 8443; do
+    # TCP
+    while iptables -L DOCKER-USER --line-numbers -n 2>/dev/null | grep -qE "tcp.*dpt:${PORT}"; do
+      LINENUM=$(iptables -L DOCKER-USER --line-numbers -n 2>/dev/null \
+        | grep -E "tcp.*dpt:${PORT}" | head -1 | awk '{print $1}')
+      [[ -z "$LINENUM" ]] && break
+      iptables -D DOCKER-USER "$LINENUM" 2>/dev/null || break
+    done
+    # UDP (port 53 only)
+    if [[ "$PORT" == "53" ]]; then
+      while iptables -L DOCKER-USER --line-numbers -n 2>/dev/null | grep -qE "udp.*dpt:53"; do
+        LINENUM=$(iptables -L DOCKER-USER --line-numbers -n 2>/dev/null \
+          | grep -E "udp.*dpt:53" | head -1 | awk '{print $1}')
+        [[ -z "$LINENUM" ]] && break
+        iptables -D DOCKER-USER "$LINENUM" 2>/dev/null || break
+      done
+    fi
   done
 
-  # Same for udp
-  while iptables -L DOCKER-USER --line-numbers -n 2>/dev/null | grep -qE 'udp.*dpt:53'; do
-    LINENUM=$(iptables -L DOCKER-USER --line-numbers -n 2>/dev/null \
-      | grep -E 'udp.*dpt:53' | head -1 | awk '{print $1}')
-    [[ -z "$LINENUM" ]] && break
-    iptables -D DOCKER-USER "$LINENUM" 2>/dev/null || break
-  done
-
-  log "DOCKER-USER port-53 rules cleared"
+  log "DOCKER-USER port-53 / port-8443 rules cleared"
 }
 
-# ── DOCKER-USER chain: add allowlist + default DROP for 53 ───
+# ── DOCKER-USER chain: add allowlist + default DROP for 53+8443
 apply_docker_dns_rules() {
-  log "Applying DOCKER-USER port-53 rules..."
+  log "Applying DOCKER-USER port-53 / port-8443 rules..."
 
-  # First add the default DROP rules at the END (we'll insert ALLOWs before them)
-  iptables -A DOCKER-USER -p tcp --dport 53 -j DROP
-  iptables -A DOCKER-USER -p udp --dport 53 -j DROP
-  log "  Default DROP for port 53 added"
+  # Default DROP rules at the END (ALLOWs are inserted before them)
+  iptables -A DOCKER-USER -p tcp --dport 53   -j DROP
+  iptables -A DOCKER-USER -p udp --dport 53   -j DROP
+  iptables -A DOCKER-USER -p tcp --dport 8443 -j DROP
+  log "  Default DROP for ports 53 and 8443 added"
 
   if [[ ! -f "$ALLOWLIST" ]]; then
-    log "No allowlist.txt — port 53 blocked for all IPs"
+    log "No allowlist.txt — ports 53 and 8443 blocked for all IPs"
     return
   fi
 
@@ -80,14 +84,15 @@ apply_docker_dns_rules() {
   while IFS= read -r ip; do
     ip="${ip// /}"
     [[ -z "$ip" || "$ip" == \#* ]] && continue
-    log "  Allowing 53/tcp+udp from ${ip}"
+    log "  Allowing 53/tcp+udp and 8443/tcp from ${ip}"
     # Insert RETURN rules BEFORE the DROP rules (at position 1)
-    iptables -I DOCKER-USER 1 -p udp --dport 53 -s "$ip" -j RETURN
-    iptables -I DOCKER-USER 1 -p tcp --dport 53 -s "$ip" -j RETURN
+    iptables -I DOCKER-USER 1 -p udp --dport 53   -s "$ip" -j RETURN
+    iptables -I DOCKER-USER 1 -p tcp --dport 53   -s "$ip" -j RETURN
+    iptables -I DOCKER-USER 1 -p tcp --dport 8443 -s "$ip" -j RETURN
     (( count++ )) || true
   done < "$ALLOWLIST"
 
-  log "Added DNS ALLOW rules for ${count} IPs"
+  log "Added ALLOW rules for ${count} IPs on ports 53 + 8443"
 }
 
 # ── Bootstrap: full UFW setup ────────────────────────────────

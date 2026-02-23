@@ -25,7 +25,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq \
   curl git ufw apache2-utils ca-certificates \
-  gnupg lsb-release net-tools dnsutils
+  gnupg lsb-release net-tools dnsutils openssl
 ok "Base packages installed"
 
 # ── 2. Install Docker ─────────────────────────────────────────
@@ -119,6 +119,40 @@ sed -i "s|password:.*placeholder_replace_via_bootstrap.*|password: \"${HASH_ESCA
 sed -i "s|^ADGUARD_ADMIN_PASSWORD_HASH=.*|ADGUARD_ADMIN_PASSWORD_HASH=${HASH_ESCAPED}|" "$ENV_FILE"
 
 ok "AdGuard password hash configured"
+
+# ── 7.5. Generate self-signed TLS cert for AdGuard DoH ───────
+CERT_DIR="${INFRA_DIR}/adguard/certs"
+CERT_FILE="${CERT_DIR}/agh.crt"
+KEY_FILE="${CERT_DIR}/agh.key"
+SERVER_IP=$(hostname -I | awk '{print $1}')
+
+mkdir -p "$CERT_DIR"
+
+if [[ ! -f "$CERT_FILE" ]]; then
+  log "Generating self-signed TLS cert (valid 10 years, SAN=IP:${SERVER_IP})..."
+  openssl req -x509 -newkey rsa:2048 -nodes \
+    -keyout "$KEY_FILE" \
+    -out    "$CERT_FILE" \
+    -days   3650 \
+    -subj   "/CN=${SERVER_IP}" \
+    -addext "subjectAltName=IP:${SERVER_IP}" \
+    2>/dev/null
+  chmod 644 "$CERT_FILE"
+  chmod 600 "$KEY_FILE"
+  # Copy to /tmp for easy retrieval (base64 for Windows client-setup script)
+  cp "$CERT_FILE" /tmp/agh.crt
+  ok "TLS cert generated at ${CERT_FILE}"
+  log "SHA-256 fingerprint: $(openssl x509 -in "$CERT_FILE" -noout -fingerprint -sha256 | cut -d= -f2)"
+  echo ""
+  log "--- WINDOWS CLIENT SETUP ---"
+  log "Run client-setup/windows-doh-setup.ps1 on Windows 11 as Administrator."
+  log "The script auto-fetches the cert, or you can pre-embed it:"
+  log "  Base64 cert (copy into \$CERT_B64 in the .ps1):"
+  base64 -w0 "$CERT_FILE"
+  echo ""
+else
+  ok "TLS cert already exists at ${CERT_FILE} — skipping"
+fi
 
 # ── 8. Apply firewall (bootstrap mode) ───────────────────────
 log "Applying UFW firewall rules..."
