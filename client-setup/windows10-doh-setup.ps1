@@ -159,7 +159,7 @@ if ($Uninstall) {
     $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($svc) {
         Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-        & "$InstallDir\dnscrypt-proxy.exe" -service uninstall 2>&1 | Out-Null
+        try { $null = & "$InstallDir\dnscrypt-proxy.exe" -service uninstall 2>&1 } catch {}
         Write-Ok "Service '$ServiceName' removed"
     } else {
         Write-Warn "Service '$ServiceName' not found — skipping"
@@ -294,7 +294,7 @@ Write-Ok "Config written to $configPath"
 $svcExisting = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($svcExisting) {
     Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-    $null = & "$InstallDir\dnscrypt-proxy.exe" -config $configPath -service uninstall 2>&1
+    try { $null = & "$InstallDir\dnscrypt-proxy.exe" -config $configPath -service uninstall 2>&1 } catch {}
 }
 
 # Install the service — dnscrypt-proxy exits non-zero even on success, so catch the error
