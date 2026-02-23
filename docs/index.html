@@ -244,25 +244,20 @@
 
     <!-- Windows 10 -->
     <div id="win10" class="tab-panel">
-      <div class="alert">
-        <strong>Note:</strong> Windows 10 does not support built-in DNS-over-HTTPS (DoH).
-        This script configures plain DNS (port 53). Your queries are not encrypted,
-        but access is still restricted to allowlisted IPs. For encrypted DoH, upgrade to Windows 11.
-      </div>
       <div class="code-wrap">
         <div class="code-label">PowerShell — run as Administrator</div>
-        <pre><code>irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows10-dns-setup.ps1 | iex</code></pre>
+        <pre><code>irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows10-doh-setup.ps1 | iex</code></pre>
         <button class="copy-btn" onclick="copy(this)">Copy</button>
       </div>
-      <p>This command: installs the server certificate and sets DNS to 159.89.25.145 on all active adapters.</p>
+      <p>This single command: installs the server certificate, downloads and installs <strong>dnscrypt-proxy</strong> as a Windows service, configures it to forward all DNS over HTTPS to the private server, and sets DNS on all active adapters to <code style="color:var(--accent)">127.0.0.1</code>.</p>
       <p style="margin-top:4px">If execution policy blocks it:</p>
       <div class="code-wrap">
-        <pre><code>powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows10-dns-setup.ps1 | iex"</code></pre>
+        <pre><code>powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows10-doh-setup.ps1 | iex"</code></pre>
         <button class="copy-btn" onclick="copy(this)">Copy</button>
       </div>
       <p style="margin-top:8px">To undo everything:</p>
       <div class="code-wrap">
-        <pre><code>.\windows10-dns-setup.ps1 -Uninstall</code></pre>
+        <pre><code>.\windows10-doh-setup.ps1 -Uninstall</code></pre>
         <button class="copy-btn" onclick="copy(this)">Copy</button>
       </div>
     </div>
@@ -346,11 +341,15 @@ resolvectl flush-caches</code></pre>
 
     <div id="vwin10" class="tab-panel">
       <div class="code-wrap">
-        <div class="code-label">Command Prompt or PowerShell</div>
-        <pre><code>nslookup google.com 159.89.25.145</code></pre>
+        <div class="code-label">PowerShell</div>
+        <pre><code>nslookup google.com 127.0.0.1</code></pre>
         <button class="copy-btn" onclick="copy(this)">Copy</button>
       </div>
-      <p>You should see a non-<code style="color:var(--accent)">198.18.x.x</code> address in the answer. If it times out or returns <code style="color:var(--accent)">198.18.x.x</code>, your IP is not yet on the allowlist.</p>
+      <p>Queries go to <code style="color:var(--accent)">127.0.0.1</code> (dnscrypt-proxy), which forwards them over HTTPS to the private server. You should see a real IP in the answer. Check service status with:</p>
+      <div class="code-wrap">
+        <pre><code>Get-Service dnscrypt-proxy</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
     </div>
 
     <div id="vother" class="tab-panel">
@@ -417,7 +416,14 @@ resolvectl flush-caches</code></pre>
         <span class="icon">&#x1F4BB;</span>
         <div>
           <strong>Using Windows 10?</strong><br>
-          <span class="desc">The Windows 11 script will fail on Windows 10 because DoH template registration is not supported. Use the <strong>Windows 10</strong> tab in Step 1 instead — it sets up plain DNS (port 53) which works on all Windows versions.</span>
+          <span class="desc">Use the <strong>Windows 10</strong> tab in Step 1. It installs dnscrypt-proxy as a local service to provide full DoH support. The Windows 11 script will fail on Windows 10 because the built-in DoH template API doesn't exist.</span>
+        </div>
+      </li>
+      <li>
+        <span class="icon">&#x2699;&#xFE0F;</span>
+        <div>
+          <strong>dnscrypt-proxy service not running (Windows 10)</strong><br>
+          <span class="desc">Run <code style="color:var(--accent)">Get-Service dnscrypt-proxy</code> to check status. To restart: <code style="color:var(--accent)">Restart-Service dnscrypt-proxy</code>. Logs: <code style="color:var(--accent)">Get-EventLog -LogName Application -Source dnscrypt-proxy -Newest 20</code></span>
         </div>
       </li>
     </ul>
