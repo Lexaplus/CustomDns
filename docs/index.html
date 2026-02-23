@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LexDNS — Private DNS Setup</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --accent:    #58a6ff;
+      --accent2:   #3fb950;
+      --warn:      #d29922;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --code-bg:   #1f2937;
+      --radius:    10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      padding: 0 16px 80px;
+    }
+
+    /* ── Header ── */
+    header {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 56px 0 32px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .logo-icon {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, var(--accent), #1f6feb);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+    }
+    h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
+    .tagline { color: var(--muted); font-size: 1.05rem; margin-top: 4px; }
+
+    /* ── Layout ── */
+    main { max-width: 760px; margin: 0 auto; }
+
+    /* ── Section ── */
+    section { margin-top: 48px; }
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h2 .num {
+      width: 28px; height: 28px;
+      background: var(--accent);
+      color: #0d1117;
+      border-radius: 50%;
+      font-size: 0.85rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    p { color: var(--muted); margin-bottom: 12px; }
+
+    /* ── OS Tabs ── */
+    .tabs { display: flex; gap: 4px; margin-bottom: 0; border-bottom: 1px solid var(--border); }
+    .tab {
+      padding: 8px 18px;
+      border: none;
+      background: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color .15s;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Code block ── */
+    .code-wrap {
+      position: relative;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 12px 0;
+    }
+    .code-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding: 8px 14px 0;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    pre {
+      padding: 12px 14px 14px;
+      overflow-x: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      white-space: pre;
+    }
+    code { color: var(--text); }
+    .copy-btn {
+      position: absolute;
+      top: 8px; right: 10px;
+      background: var(--border);
+      border: none;
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .copy-btn:hover { background: var(--accent); color: #0d1117; }
+    .copy-btn.copied { background: var(--accent2); color: #0d1117; }
+
+    /* ── Alert box ── */
+    .alert {
+      border-left: 3px solid var(--warn);
+      background: #1c1a0f;
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      color: var(--text);
+      margin: 16px 0;
+    }
+    .alert strong { color: var(--warn); }
+
+    /* ── Check list ── */
+    .checks { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+    .checks li {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 0.9rem;
+    }
+    .checks li .icon { flex-shrink: 0; font-size: 1rem; }
+    .checks li .desc { color: var(--muted); font-size: 0.82rem; }
+
+    /* ── Badge row ── */
+    .badge-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+    .badge {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .badge span { color: var(--accent); font-weight: 600; }
+
+    /* ── Footer ── */
+    footer {
+      max-width: 760px;
+      margin: 64px auto 0;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.82rem;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">&#x1F512;</div>
+    <div>
+      <h1>LexDNS</h1>
+      <div class="tagline">Private DNS-over-HTTPS — one command to connect</div>
+    </div>
+  </div>
+  <div class="badge-row">
+    <div class="badge">Server <span>159.89.25.145</span></div>
+    <div class="badge">DoH <span>:8443</span></div>
+    <div class="badge">Plain DNS <span>:53</span></div>
+    <div class="badge">Powered by <span>AdGuard Home</span></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Step 0: Prerequisites ── -->
+  <section>
+    <div class="alert">
+      <strong>Before you start:</strong> your IP address must be added to the allowlist by the admin.
+      Contact the server admin (or use the Telegram bot) to get your IP allowlisted first.
+    </div>
+  </section>
+
+  <!-- ── Step 1: Install ── -->
+  <section>
+    <h2><span class="num">1</span> Install</h2>
+    <p>Choose your platform below and run the command as Administrator / root.</p>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab(event,'win')">Windows 11</button>
+      <button class="tab" onclick="switchTab(event,'mac')">macOS</button>
+      <button class="tab" onclick="switchTab(event,'linux')">Linux</button>
+      <button class="tab" onclick="switchTab(event,'mobile')">Android / iOS</button>
+    </div>
+
+    <!-- Windows -->
+    <div id="win" class="tab-panel active">
+      <div class="code-wrap">
+        <div class="code-label">PowerShell — run as Administrator</div>
+        <pre><code>irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows-doh-setup.ps1 | iex</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p>This single command: installs the server certificate, registers the DoH template, and sets DNS on all active adapters.</p>
+      <p style="margin-top:4px">If execution policy blocks it:</p>
+      <div class="code-wrap">
+        <pre><code>powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows-doh-setup.ps1 | iex"</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p style="margin-top:8px">To undo everything:</p>
+      <div class="code-wrap">
+        <pre><code>.\windows-doh-setup.ps1 -Uninstall</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+    </div>
+
+    <!-- macOS -->
+    <div id="mac" class="tab-panel">
+      <div class="code-wrap">
+        <div class="code-label">Terminal</div>
+        <pre><code>networksetup -setdnsservers Wi-Fi 159.89.25.145</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p>Replace <code style="color:var(--accent)">Wi-Fi</code> with your interface name if different (e.g. <code style="color:var(--accent)">Ethernet</code>).</p>
+      <p style="margin-top:8px">Verify:</p>
+      <div class="code-wrap">
+        <pre><code>scutil --dns | grep nameserver
+dig google.com @159.89.25.145</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p style="margin-top:8px">To revert:</p>
+      <div class="code-wrap">
+        <pre><code>networksetup -setdnsservers Wi-Fi "Empty"</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+    </div>
+
+    <!-- Linux -->
+    <div id="linux" class="tab-panel">
+      <div class="code-wrap">
+        <div class="code-label">systemd-resolved</div>
+        <pre><code>resolvectl dns eth0 159.89.25.145
+resolvectl flush-caches</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p>Replace <code style="color:var(--accent)">eth0</code> with your interface (<code style="color:var(--accent)">ip link</code> to list).</p>
+      <p style="margin-top:8px">Or edit <code style="color:var(--accent)">/etc/resolv.conf</code> directly:</p>
+      <div class="code-wrap">
+        <pre><code>echo "nameserver 159.89.25.145" | sudo tee /etc/resolv.conf</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+    </div>
+
+    <!-- Mobile -->
+    <div id="mobile" class="tab-panel">
+      <ul class="checks">
+        <li>
+          <span class="icon">&#x1F4F1;</span>
+          <div>
+            <strong>Android</strong><br>
+            <span class="desc">Settings → Network &amp; internet → Private DNS → enter <strong>159.89.25.145</strong></span>
+          </div>
+        </li>
+        <li>
+          <span class="icon">&#x1F34E;</span>
+          <div>
+            <strong>iOS / iPadOS</strong><br>
+            <span class="desc">Settings → Wi-Fi → tap your network → Configure DNS → Manual → add <strong>159.89.25.145</strong></span>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ── Step 2: Verify ── -->
+  <section>
+    <h2><span class="num">2</span> Verify</h2>
+    <p>Run the verification script to confirm all 6 checks pass.</p>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab(event,'vwin')">Windows 11</button>
+      <button class="tab" onclick="switchTab(event,'vother')">macOS / Linux</button>
+    </div>
+
+    <div id="vwin" class="tab-panel active">
+      <div class="code-wrap">
+        <div class="code-label">PowerShell — run as Administrator</div>
+        <pre><code>irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows-doh-verify.ps1 | iex</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+    </div>
+
+    <div id="vother" class="tab-panel">
+      <div class="code-wrap">
+        <div class="code-label">Terminal</div>
+        <pre><code>dig google.com @159.89.25.145</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p>You should see an <code style="color:var(--accent2)">ANSWER SECTION</code> with a real IP. If it times out, your IP is not yet on the allowlist.</p>
+    </div>
+
+    <p style="margin-top:16px">The Windows script checks:</p>
+    <ul class="checks">
+      <li><span class="icon">&#x2705;</span><div><strong>DNS adapter config</strong><br><span class="desc">159.89.25.145 set on your active network adapter</span></div></li>
+      <li><span class="icon">&#x2705;</span><div><strong>Trusted Root certificate</strong><br><span class="desc">Self-signed cert installed in LocalMachine\Root store</span></div></li>
+      <li><span class="icon">&#x2705;</span><div><strong>DoH template registered</strong><br><span class="desc">Windows DNS client knows to use HTTPS on port 8443</span></div></li>
+      <li><span class="icon">&#x2705;</span><div><strong>Port 8443 reachable</strong><br><span class="desc">TLS handshake to the DoH endpoint succeeds</span></div></li>
+      <li><span class="icon">&#x2705;</span><div><strong>DNS resolves correctly</strong><br><span class="desc">google.com returns a real IP (not 198.18.x.x)</span></div></li>
+      <li><span class="icon">&#x2139;&#xFE0F;</span><div><strong>Your public IP</strong><br><span class="desc">Shown so you can confirm it's on the allowlist</span></div></li>
+    </ul>
+  </section>
+
+  <!-- ── Troubleshooting ── -->
+  <section>
+    <h2><span class="num">3</span> Troubleshooting</h2>
+
+    <ul class="checks">
+      <li>
+        <span class="icon">&#x23F3;</span>
+        <div>
+          <strong>DNS times out / no answer</strong><br>
+          <span class="desc">Your IP is not on the allowlist. Contact the admin to add it.</span>
+        </div>
+      </li>
+      <li>
+        <span class="icon">&#x1F512;</span>
+        <div>
+          <strong>Certificate error in browser</strong><br>
+          <span class="desc">Re-run the setup script as Administrator — it installs the cert into the system trust store.</span>
+        </div>
+      </li>
+      <li>
+        <span class="icon">&#x26A0;&#xFE0F;</span>
+        <div>
+          <strong>198.18.x.x returned instead of real IP</strong><br>
+          <span class="desc">This is AdGuard's NXDOMAIN-map address. Your IP is not yet allowlisted.</span>
+        </div>
+      </li>
+      <li>
+        <span class="icon">&#x1F6AB;</span>
+        <div>
+          <strong>Execution policy error on Windows</strong><br>
+          <span class="desc">Use the <code style="color:var(--accent)">-ExecutionPolicy Bypass</code> command shown in Step 1.</span>
+        </div>
+      </li>
+      <li>
+        <span class="icon">&#x21A9;&#xFE0F;</span>
+        <div>
+          <strong>Want to uninstall</strong><br>
+          <span class="desc">Run <code style="color:var(--accent)">.\windows-doh-setup.ps1 -Uninstall</code> as Administrator to revert all changes.</span>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <span>LexDNS &mdash; Private DNS Service</span>
+  <span>
+    <a href="https://github.com/Lexaplus/CustomDns" target="_blank">GitHub</a>
+    &nbsp;&middot;&nbsp;
+    <a href="https://github.com/Lexaplus/CustomDns/tree/main/client-setup" target="_blank">Scripts</a>
+  </span>
+</footer>
+
+<script>
+  function switchTab(e, id) {
+    const wrap = e.target.closest('section') || e.target.parentElement.parentElement;
+    wrap.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    wrap.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    e.target.classList.add('active');
+    const panel = wrap.querySelector('#' + id) || document.getElementById(id);
+    if (panel) panel.classList.add('active');
+  }
+
+  function copy(btn) {
+    const pre = btn.closest('.code-wrap').querySelector('pre');
+    navigator.clipboard.writeText(pre.innerText.trim()).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+</script>
+</body>
+</html>
