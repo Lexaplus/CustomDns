@@ -55,19 +55,56 @@ function Write-Fail { param([string]$msg) Write-Host "    ERR $msg" -ForegroundC
 
 function Get-CertFromServer {
     Write-Step "Fetching certificate live from ${ServerAddress}:${DohPort} ..."
-    $cb = [System.Net.Security.RemoteCertificateValidationCallback]{
-        param($sender, $cert, $chain, $errors) $true
-    }
-    $tcp = [System.Net.Sockets.TcpClient]::new($ServerAddress, $DohPort)
-    $ssl = [System.Net.Security.SslStream]::new($tcp.GetStream(), $false, $cb)
+
+    # Attempt 1: SslStream (fast, direct)
     try {
-        $ssl.AuthenticateAsClient($ServerAddress)
-        $rawBytes = $ssl.RemoteCertificate.Export(
+        $cb = [System.Net.Security.RemoteCertificateValidationCallback]{
+            param($sender, $cert, $chain, $errors) $true
+        }
+        $tcp = [System.Net.Sockets.TcpClient]::new($ServerAddress, $DohPort)
+        $ssl = [System.Net.Security.SslStream]::new($tcp.GetStream(), $false, $cb)
+        try {
+            $ssl.AuthenticateAsClient($ServerAddress)
+            $rawBytes = $ssl.RemoteCertificate.Export(
+                [System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+            return [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($rawBytes)
+        } finally {
+            $ssl.Dispose(); $tcp.Dispose()
+        }
+    } catch {
+        Write-Warn "SslStream failed ($($_.Exception.Message)) — trying HttpWebRequest fallback ..."
+    }
+
+    # Attempt 2: HttpWebRequest (more compatible with PowerShell 5.1 / .NET 4.x on Windows 10)
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    # Install a permissive ICertificatePolicy so the untrusted cert doesn't block the request
+    try {
+        Add-Type -TypeDefinition @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+public class _AcceptAllCerts : ICertificatePolicy {
+    public bool CheckValidationResult(ServicePoint sp, X509Certificate cert,
+        WebRequest req, int problem) { return true; }
+}
+"@ -ErrorAction Stop
+    } catch { <# type already defined on retry — safe to ignore #> }
+
+    $saved = [System.Net.ServicePointManager]::CertificatePolicy
+    [System.Net.ServicePointManager]::CertificatePolicy = New-Object _AcceptAllCerts
+
+    try {
+        $req = [System.Net.HttpWebRequest]::Create("https://${ServerAddress}:${DohPort}/")
+        $req.Timeout = 10000
+        try { $null = $req.GetResponse() } catch [System.Net.WebException] {
+            if ($_.Exception.Response) { $_.Exception.Response.Close() }
+        }
+        if (-not $req.ServicePoint.Certificate) { throw "No certificate returned by ServicePoint" }
+        $rawBytes = $req.ServicePoint.Certificate.Export(
             [System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
         return [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($rawBytes)
     } finally {
-        $ssl.Dispose()
-        $tcp.Dispose()
+        [System.Net.ServicePointManager]::CertificatePolicy = $saved
     }
 }
 
