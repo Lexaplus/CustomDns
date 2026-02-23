@@ -249,11 +249,14 @@ Write-Ok "Config written to $configPath"
 $svcExisting = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($svcExisting) {
     Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-    & "$InstallDir\dnscrypt-proxy.exe" -config $configPath -service uninstall 2>&1 | Out-Null
+    $null = & "$InstallDir\dnscrypt-proxy.exe" -config $configPath -service uninstall 2>&1
 }
 
-& "$InstallDir\dnscrypt-proxy.exe" -config $configPath -service install 2>&1 | Out-Null
-& "$InstallDir\dnscrypt-proxy.exe" -config $configPath -service start  2>&1 | Out-Null
+# Install the service (dnscrypt-proxy may return non-zero even on success; capture and ignore)
+$null = & "$InstallDir\dnscrypt-proxy.exe" -config $configPath -service install 2>&1
+
+# Start via PowerShell cmdlet — avoids NativeCommandError from -service start flag
+Start-Service -Name $ServiceName -ErrorAction Stop
 Write-Ok "Service '$ServiceName' installed and started"
 
 Start-Sleep -Seconds 2  # give the service a moment to bind port 53
