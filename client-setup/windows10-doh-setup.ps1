@@ -38,6 +38,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# Runtime admin check (#Requires -RunAsAdministrator is ignored when piped through iex)
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+        ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "`n  ERROR: This script must run as Administrator." -ForegroundColor Red
+    Write-Host "  Right-click PowerShell -> 'Run as Administrator', then try again.`n" -ForegroundColor Yellow
+    exit 1
+}
+
 # ---------------------------------------------------------------------------
 # Embedded certificate (optional — leave empty to fetch live at runtime).
 # ---------------------------------------------------------------------------
