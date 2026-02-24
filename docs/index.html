@@ -216,6 +216,7 @@
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab(event,'win')">Windows 11</button>
+      <button class="tab" onclick="switchTab(event,'win10')">Windows 10</button>
       <button class="tab" onclick="switchTab(event,'mac')">macOS</button>
       <button class="tab" onclick="switchTab(event,'linux')">Linux</button>
       <button class="tab" onclick="switchTab(event,'mobile')">Android / iOS</button>
@@ -237,6 +238,26 @@
       <p style="margin-top:8px">To undo everything:</p>
       <div class="code-wrap">
         <pre><code>.\windows-doh-setup.ps1 -Uninstall</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+    </div>
+
+    <!-- Windows 10 -->
+    <div id="win10" class="tab-panel">
+      <div class="code-wrap">
+        <div class="code-label">PowerShell — run as Administrator</div>
+        <pre><code>irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows10-doh-setup.ps1 | iex</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p>This single command: installs the server certificate, downloads and installs <strong>dnscrypt-proxy</strong> as a Windows service, configures it to forward all DNS over HTTPS to the private server, and sets DNS on all active adapters to <code style="color:var(--accent)">127.0.0.1</code>. <strong style="color:var(--accent2)">1.1.1.1 is added as a fallback</strong> — if the private server is unreachable, DNS automatically falls back to Cloudflare.</p>
+      <p style="margin-top:4px">If execution policy blocks it:</p>
+      <div class="code-wrap">
+        <pre><code>powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows10-doh-setup.ps1 | iex"</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
+      <p style="margin-top:8px">To undo everything:</p>
+      <div class="code-wrap">
+        <pre><code>.\windows10-doh-setup.ps1 -Uninstall</code></pre>
         <button class="copy-btn" onclick="copy(this)">Copy</button>
       </div>
     </div>
