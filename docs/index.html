@@ -220,6 +220,7 @@
       <button class="tab" onclick="switchTab(event,'mac')">macOS</button>
       <button class="tab" onclick="switchTab(event,'linux')">Linux</button>
       <button class="tab" onclick="switchTab(event,'mobile')">Android / iOS</button>
+      <button class="tab" onclick="switchTab(event,'console')">Gaming Consoles</button>
     </div>
 
     <!-- Windows -->
@@ -320,6 +321,74 @@ resolvectl flush-caches</code></pre>
           </div>
         </li>
       </ul>
+    </div>
+
+    <!-- Gaming Consoles -->
+    <div id="console" class="tab-panel">
+      <div class="alert">
+        <strong>Plain DNS only:</strong> Gaming consoles do not support DoH or DoT. They use plain DNS on port&nbsp;53. Make sure your IP is on the allowlist before changing console settings.
+      </div>
+
+      <div class="tabs" style="margin-top:20px">
+        <button class="tab active" onclick="switchTab(event,'ps')">PS4 / PS5</button>
+        <button class="tab" onclick="switchTab(event,'xbox')">Xbox</button>
+        <button class="tab" onclick="switchTab(event,'switch')">Nintendo Switch</button>
+      </div>
+
+      <!-- PS4/PS5 -->
+      <div id="ps" class="tab-panel active">
+        <ul class="checks" style="margin-top:16px">
+          <li><span class="icon">1️⃣</span><div><strong>Settings → Network → Set Up Internet Connection</strong></div></li>
+          <li><span class="icon">2️⃣</span><div><strong>Choose Wi-Fi or LAN cable</strong></div></li>
+          <li><span class="icon">3️⃣</span><div><strong>Select <code style="color:var(--accent)">Custom</code></strong></div></li>
+          <li><span class="icon">4️⃣</span><div><strong>IP Address Settings:</strong> <span class="desc">Automatic</span></div></li>
+          <li><span class="icon">5️⃣</span><div><strong>DHCP Host Name:</strong> <span class="desc">Do Not Specify</span></div></li>
+          <li><span class="icon">6️⃣</span><div><strong>DNS Settings → <code style="color:var(--accent)">Manual</code></strong></div></li>
+          <li><span class="icon">7️⃣</span><div>
+            <strong>Enter DNS servers:</strong><br>
+            <span class="desc">Primary DNS: <strong style="color:var(--accent)">159.89.25.145</strong></span><br>
+            <span class="desc">Secondary DNS: <strong style="color:var(--accent)">1.1.1.1</strong></span>
+          </div></li>
+          <li><span class="icon">8️⃣</span><div><strong>MTU Settings:</strong> <span class="desc">Automatic</span></div></li>
+          <li><span class="icon">9️⃣</span><div><strong>Proxy Server:</strong> <span class="desc">Do Not Use</span></div></li>
+          <li><span class="icon">✅</span><div><strong>Save &amp; run Test Internet Connection</strong></div></li>
+        </ul>
+      </div>
+
+      <!-- Xbox -->
+      <div id="xbox" class="tab-panel">
+        <ul class="checks" style="margin-top:16px">
+          <li><span class="icon">1️⃣</span><div><strong>Press the Xbox button → Settings (gear icon)</strong></div></li>
+          <li><span class="icon">2️⃣</span><div><strong>General → Network settings</strong></div></li>
+          <li><span class="icon">3️⃣</span><div><strong>Advanced settings</strong></div></li>
+          <li><span class="icon">4️⃣</span><div><strong>DNS settings → <code style="color:var(--accent)">Manual</code></strong></div></li>
+          <li><span class="icon">5️⃣</span><div>
+            <strong>Enter DNS servers:</strong><br>
+            <span class="desc">Primary DNS: <strong style="color:var(--accent)">159.89.25.145</strong></span><br>
+            <span class="desc">Secondary DNS: <strong style="color:var(--accent)">1.1.1.1</strong></span>
+          </div></li>
+          <li><span class="icon">✅</span><div><strong>Press B to save, then test network connection</strong></div></li>
+        </ul>
+        <p style="margin-top:8px">Works on Xbox One, Xbox Series X, and Xbox Series S.</p>
+      </div>
+
+      <!-- Nintendo Switch -->
+      <div id="switch" class="tab-panel">
+        <ul class="checks" style="margin-top:16px">
+          <li><span class="icon">1️⃣</span><div><strong>System Settings</strong></div></li>
+          <li><span class="icon">2️⃣</span><div><strong>Internet → Internet Settings</strong></div></li>
+          <li><span class="icon">3️⃣</span><div><strong>Select your Wi-Fi network</strong></div></li>
+          <li><span class="icon">4️⃣</span><div><strong>Change Settings</strong></div></li>
+          <li><span class="icon">5️⃣</span><div><strong>DNS Settings → <code style="color:var(--accent)">Manual</code></strong></div></li>
+          <li><span class="icon">6️⃣</span><div>
+            <strong>Enter DNS servers:</strong><br>
+            <span class="desc">Primary DNS: <strong style="color:var(--accent)">159.89.25.145</strong></span><br>
+            <span class="desc">Secondary DNS: <strong style="color:var(--accent)">1.1.1.1</strong></span>
+          </div></li>
+          <li><span class="icon">✅</span><div><strong>Save → Connect to This Network</strong></div></li>
+        </ul>
+        <p style="margin-top:8px">Nintendo Switch only supports Wi-Fi — no wired adapter DNS tab exists.</p>
+      </div>
     </div>
   </section>
 
@@ -454,11 +523,13 @@ with urllib.request.urlopen(req, context=ctx) as r:
 
 <script>
   function switchTab(e, id) {
-    const wrap = e.target.closest('section') || e.target.parentElement.parentElement;
-    wrap.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    wrap.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    // Scope to the direct parent of the .tabs bar so nested tab groups
+    // don't interfere with each other.
+    const container = e.target.closest('.tabs').parentElement;
+    container.querySelectorAll(':scope > .tabs .tab').forEach(t => t.classList.remove('active'));
+    container.querySelectorAll(':scope > .tab-panel').forEach(p => p.classList.remove('active'));
     e.target.classList.add('active');
-    const panel = wrap.querySelector('#' + id) || document.getElementById(id);
+    const panel = container.querySelector(':scope > #' + id);
     if (panel) panel.classList.add('active');
   }
 
