@@ -46,56 +46,25 @@ function Write-Warn   { param([string]$msg) Write-Host "    !   $msg" -Foregroun
 function Write-Fail   { param([string]$msg) Write-Host "    ERR $msg" -ForegroundColor Red  }
 
 function Get-CertFromServer {
+    <#
+    Opens a raw TLS connection to $ServerAddress:$DohPort, reads the peer
+    certificate, and returns an X509Certificate2 object.
+    #>
     Write-Step "Fetching certificate live from ${ServerAddress}:${DohPort} ..."
-
-    # Attempt 1: SslStream (fast, direct)
-    try {
-        $cb = [System.Net.Security.RemoteCertificateValidationCallback]{
-            param($sender, $cert, $chain, $errors) $true
-        }
-        $tcp = [System.Net.Sockets.TcpClient]::new($ServerAddress, $DohPort)
-        $ssl = [System.Net.Security.SslStream]::new($tcp.GetStream(), $false, $cb)
-        try {
-            $ssl.AuthenticateAsClient($ServerAddress)
-            $rawBytes = $ssl.RemoteCertificate.Export(
-                [System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
-            return [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($rawBytes)
-        } finally {
-            $ssl.Dispose(); $tcp.Dispose()
-        }
-    } catch {
-        Write-Warn "SslStream failed ($($_.Exception.Message)) — trying HttpWebRequest fallback ..."
+    $cb = [System.Net.Security.RemoteCertificateValidationCallback]{
+        param($sender, $cert, $chain, $errors) $true   # accept anything
     }
-
-    # Attempt 2: HttpWebRequest (more compatible with some Windows TLS configurations)
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
+    $tcp    = [System.Net.Sockets.TcpClient]::new($ServerAddress, $DohPort)
+    $ssl    = [System.Net.Security.SslStream]::new($tcp.GetStream(), $false, $cb)
     try {
-        Add-Type -TypeDefinition @"
-using System.Net;
-using System.Security.Cryptography.X509Certificates;
-public class _AcceptAllCerts : ICertificatePolicy {
-    public bool CheckValidationResult(ServicePoint sp, X509Certificate cert,
-        WebRequest req, int problem) { return true; }
-}
-"@ -ErrorAction Stop
-    } catch { <# type already defined on retry — safe to ignore #> }
-
-    $saved = [System.Net.ServicePointManager]::CertificatePolicy
-    [System.Net.ServicePointManager]::CertificatePolicy = New-Object _AcceptAllCerts
-
-    try {
-        $req = [System.Net.HttpWebRequest]::Create("https://${ServerAddress}:${DohPort}/")
-        $req.Timeout = 10000
-        try { $null = $req.GetResponse() } catch [System.Net.WebException] {
-            if ($_.Exception.Response) { $_.Exception.Response.Close() }
-        }
-        if (-not $req.ServicePoint.Certificate) { throw "No certificate returned by ServicePoint" }
-        $rawBytes = $req.ServicePoint.Certificate.Export(
+        $ssl.AuthenticateAsClient($ServerAddress)
+        # SslStream exposes a RemoteCertificate (X509Certificate); upgrade it
+        $rawBytes = $ssl.RemoteCertificate.Export(
             [System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
         return [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($rawBytes)
     } finally {
-        [System.Net.ServicePointManager]::CertificatePolicy = $saved
+        $ssl.Dispose()
+        $tcp.Dispose()
     }
 }
 
@@ -146,7 +115,9 @@ if ($Uninstall) {
     # Reset DNS on all adapters that currently point to our server
     Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | ForEach-Object {
         $cfg = Get-DnsClientServerAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4
-        if ($cfg.ServerAddresses -contains $ServerAddress) {
+        $servers = @($cfg.ServerAddresses)
+        if ($servers -contains $ServerAddress -or
+            ($servers.Count -gt 0 -and $servers[0] -eq "1.1.1.1")) {
             Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses
             Write-Ok "Reset DNS on '$($_.Name)'"
         }
@@ -210,8 +181,8 @@ $adapters = Get-NetAdapter | Where-Object { $_.Status -eq "Up" }
 if (-not $adapters) { Write-Warn "No active adapters found — DNS not set" }
 foreach ($adapter in $adapters) {
     Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex `
-        -ServerAddress $ServerAddress
-    Write-Ok "  [$($adapter.Name)] -> $ServerAddress"
+        -ServerAddress @($ServerAddress, "1.1.1.1")
+    Write-Ok "  [$($adapter.Name)] -> $ServerAddress (DoH) + 1.1.1.1 (fallback)"
 }
 
 # Flush resolver cache so the new config takes effect immediately
@@ -246,14 +217,26 @@ if ($testResult -and $testResult.IPAddress -notmatch "^198\.18\.") {
     Write-Host "  Cert   : $thumbprint"    -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  To revert, run:  .\windows-doh-setup.ps1 -Uninstall" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  RECOVERY (if internet stops): run in PowerShell (no admin needed):" -ForegroundColor Yellow
+    Write-Host "    Set-DnsClientServerAddress -InterfaceAlias 'Wi-Fi' -ResetServerAddresses" -ForegroundColor Yellow
+    Write-Host "    Set-DnsClientServerAddress -InterfaceAlias 'Ethernet' -ResetServerAddresses" -ForegroundColor Yellow
 } elseif ($testResult) {
     Write-Warn "Resolution returned a NXDOMAIN-mapped address ($($testResult.IPAddress))."
     Write-Warn "DNS is set but the server may be blocking this client."
     Write-Warn "Ask the server admin to allowlist your IP."
+    Write-Host ""
+    Write-Host "  RECOVERY (if internet stops): run in PowerShell (no admin needed):" -ForegroundColor Yellow
+    Write-Host "    Set-DnsClientServerAddress -InterfaceAlias 'Wi-Fi' -ResetServerAddresses" -ForegroundColor Yellow
+    Write-Host "    Set-DnsClientServerAddress -InterfaceAlias 'Ethernet' -ResetServerAddresses" -ForegroundColor Yellow
 } else {
     Write-Fail "Could not resolve google.com."
     Write-Fail "Possible causes:"
     Write-Fail "  - Server $ServerAddress is unreachable"
     Write-Fail "  - Your IP is not on the server allowlist"
     Write-Fail "  - Certificate validation failed (try Step 2 manually in certlm.msc)"
+    Write-Host ""
+    Write-Host "  RECOVERY (if internet stops): run in PowerShell (no admin needed):" -ForegroundColor Yellow
+    Write-Host "    Set-DnsClientServerAddress -InterfaceAlias 'Wi-Fi' -ResetServerAddresses" -ForegroundColor Yellow
+    Write-Host "    Set-DnsClientServerAddress -InterfaceAlias 'Ethernet' -ResetServerAddresses" -ForegroundColor Yellow
 }

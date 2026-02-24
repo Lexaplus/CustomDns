@@ -216,20 +216,19 @@
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab(event,'win')">Windows 11</button>
-      <button class="tab" onclick="switchTab(event,'win10')">Windows 10</button>
       <button class="tab" onclick="switchTab(event,'mac')">macOS</button>
       <button class="tab" onclick="switchTab(event,'linux')">Linux</button>
       <button class="tab" onclick="switchTab(event,'mobile')">Android / iOS</button>
     </div>
 
-    <!-- Windows 11 -->
+    <!-- Windows -->
     <div id="win" class="tab-panel active">
       <div class="code-wrap">
         <div class="code-label">PowerShell — run as Administrator</div>
         <pre><code>irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows-doh-setup.ps1 | iex</code></pre>
         <button class="copy-btn" onclick="copy(this)">Copy</button>
       </div>
-      <p>This single command: installs the server certificate, registers the DoH template, and sets DNS on all active adapters.</p>
+      <p>This single command: installs the server certificate, registers the DoH template, and sets DNS on all active adapters. <strong style="color:var(--accent2)">1.1.1.1 is added as a fallback</strong> — if the private server is unreachable, DNS automatically falls back to Cloudflare so your internet keeps working.</p>
       <p style="margin-top:4px">If execution policy blocks it:</p>
       <div class="code-wrap">
         <pre><code>powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows-doh-setup.ps1 | iex"</code></pre>
@@ -242,26 +241,6 @@
       </div>
     </div>
 
-    <!-- Windows 10 -->
-    <div id="win10" class="tab-panel">
-      <div class="code-wrap">
-        <div class="code-label">PowerShell — run as Administrator</div>
-        <pre><code>irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows10-doh-setup.ps1 | iex</code></pre>
-        <button class="copy-btn" onclick="copy(this)">Copy</button>
-      </div>
-      <p>This single command: installs the server certificate, downloads and installs <strong>dnscrypt-proxy</strong> as a Windows service, configures it to forward all DNS over HTTPS to the private server, and sets DNS on all active adapters to <code style="color:var(--accent)">127.0.0.1</code>.</p>
-      <p style="margin-top:4px">If execution policy blocks it:</p>
-      <div class="code-wrap">
-        <pre><code>powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Lexaplus/CustomDns/main/client-setup/windows10-doh-setup.ps1 | iex"</code></pre>
-        <button class="copy-btn" onclick="copy(this)">Copy</button>
-      </div>
-      <p style="margin-top:8px">To undo everything:</p>
-      <div class="code-wrap">
-        <pre><code>.\windows10-doh-setup.ps1 -Uninstall</code></pre>
-        <button class="copy-btn" onclick="copy(this)">Copy</button>
-      </div>
-    </div>
-
     <!-- macOS -->
     <div id="mac" class="tab-panel">
       <div class="code-wrap">
@@ -270,10 +249,13 @@
         <button class="copy-btn" onclick="copy(this)">Copy</button>
       </div>
       <p>Replace <code style="color:var(--accent)">Wi-Fi</code> with your interface name if different (e.g. <code style="color:var(--accent)">Ethernet</code>).</p>
+      <div class="alert" style="margin-top:12px">
+        <strong>Note:</strong> Some ISPs (especially in Iran) hijack UDP port 53 and return fake results. Use <code style="color:var(--accent)">+tcp</code> to test reliably.
+      </div>
       <p style="margin-top:8px">Verify:</p>
       <div class="code-wrap">
         <pre><code>scutil --dns | grep nameserver
-dig google.com @159.89.25.145</code></pre>
+dig google.com @159.89.25.145 +tcp</code></pre>
         <button class="copy-btn" onclick="copy(this)">Copy</button>
       </div>
       <p style="margin-top:8px">To revert:</p>
@@ -327,7 +309,6 @@ resolvectl flush-caches</code></pre>
 
     <div class="tabs">
       <button class="tab active" onclick="switchTab(event,'vwin')">Windows 11</button>
-      <button class="tab" onclick="switchTab(event,'vwin10')">Windows 10</button>
       <button class="tab" onclick="switchTab(event,'vother')">macOS / Linux</button>
     </div>
 
@@ -339,29 +320,36 @@ resolvectl flush-caches</code></pre>
       </div>
     </div>
 
-    <div id="vwin10" class="tab-panel">
-      <div class="code-wrap">
-        <div class="code-label">PowerShell</div>
-        <pre><code>nslookup google.com 127.0.0.1</code></pre>
-        <button class="copy-btn" onclick="copy(this)">Copy</button>
-      </div>
-      <p>Queries go to <code style="color:var(--accent)">127.0.0.1</code> (dnscrypt-proxy), which forwards them over HTTPS to the private server. You should see a real IP in the answer. Check service status with:</p>
-      <div class="code-wrap">
-        <pre><code>Get-Service dnscrypt-proxy</code></pre>
-        <button class="copy-btn" onclick="copy(this)">Copy</button>
-      </div>
-    </div>
-
     <div id="vother" class="tab-panel">
+      <div class="alert">
+        <strong>ISPs in some regions (e.g. Iran) hijack UDP port 53.</strong> Always use <code>+tcp</code> or the DoH test below — plain <code>dig</code> without <code>+tcp</code> may return <code>198.18.x.x</code> even when the server is working.
+      </div>
       <div class="code-wrap">
-        <div class="code-label">Terminal</div>
-        <pre><code>dig google.com @159.89.25.145</code></pre>
+        <div class="code-label">Terminal — TCP DNS test</div>
+        <pre><code>dig google.com @159.89.25.145 +tcp</code></pre>
         <button class="copy-btn" onclick="copy(this)">Copy</button>
       </div>
       <p>You should see an <code style="color:var(--accent2)">ANSWER SECTION</code> with a real IP. If it times out, your IP is not yet on the allowlist.</p>
+      <p style="margin-top:12px">Or test DoH directly (bypasses ISP entirely):</p>
+      <div class="code-wrap">
+        <div class="code-label">Python 3 — DoH test</div>
+        <pre><code>python3 -c "
+import urllib.request, ssl, base64
+q = b'\x00\x00\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x06google\x03com\x00\x00\x01\x00\x01'
+url = 'https://159.89.25.145:8443/dns-query?dns=' + base64.urlsafe_b64encode(q).rstrip(b'=').decode()
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+req = urllib.request.Request(url, headers={'accept': 'application/dns-message'})
+with urllib.request.urlopen(req, context=ctx) as r:
+    data = r.read()
+    print('google.com ->', '.'.join(str(b) for b in data[-4:]))
+"</code></pre>
+        <button class="copy-btn" onclick="copy(this)">Copy</button>
+      </div>
     </div>
 
-    <p style="margin-top:16px">The Windows 11 script checks:</p>
+    <p style="margin-top:16px">The Windows script checks:</p>
     <ul class="checks">
       <li><span class="icon">&#x2705;</span><div><strong>DNS adapter config</strong><br><span class="desc">159.89.25.145 set on your active network adapter</span></div></li>
       <li><span class="icon">&#x2705;</span><div><strong>Trusted Root certificate</strong><br><span class="desc">Self-signed cert installed in LocalMachine\Root store</span></div></li>
@@ -409,21 +397,24 @@ resolvectl flush-caches</code></pre>
         <span class="icon">&#x21A9;&#xFE0F;</span>
         <div>
           <strong>Want to uninstall</strong><br>
-          <span class="desc">Run <code style="color:var(--accent)">.\windows-doh-setup.ps1 -Uninstall</code> (Win 11) or <code style="color:var(--accent)">.\windows10-dns-setup.ps1 -Uninstall</code> (Win 10) as Administrator to revert all changes.</span>
+          <span class="desc">Run <code style="color:var(--accent)">.\windows-doh-setup.ps1 -Uninstall</code> as Administrator to revert all changes.</span>
         </div>
       </li>
       <li>
-        <span class="icon">&#x1F4BB;</span>
+        <span class="icon">&#x1F6D1;</span>
         <div>
-          <strong>Using Windows 10?</strong><br>
-          <span class="desc">Use the <strong>Windows 10</strong> tab in Step 1. It installs dnscrypt-proxy as a local service to provide full DoH support. The Windows 11 script will fail on Windows 10 because the built-in DoH template API doesn't exist.</span>
+          <strong>Internet stopped working after setup (Windows)</strong><br>
+          <span class="desc">Run in PowerShell — <strong>no admin needed</strong>:<br>
+          <code style="color:var(--accent)">Set-DnsClientServerAddress -InterfaceAlias "Wi-Fi" -ResetServerAddresses</code><br>
+          <code style="color:var(--accent)">Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ResetServerAddresses</code><br>
+          This restores automatic DNS from your router instantly. Then contact the admin to get your IP allowlisted before re-running the script.</span>
         </div>
       </li>
       <li>
-        <span class="icon">&#x2699;&#xFE0F;</span>
+        <span class="icon">&#x1F310;</span>
         <div>
-          <strong>dnscrypt-proxy service not running (Windows 10)</strong><br>
-          <span class="desc">Run <code style="color:var(--accent)">Get-Service dnscrypt-proxy</code> to check status. To restart: <code style="color:var(--accent)">Restart-Service dnscrypt-proxy</code>. Logs: <code style="color:var(--accent)">Get-EventLog -LogName Application -Source dnscrypt-proxy -Newest 20</code></span>
+          <strong>dig returns 198.18.x.x even for 8.8.8.8</strong><br>
+          <span class="desc">Your ISP is hijacking UDP port 53. This is common in Iran and some other regions. Use <code style="color:var(--accent)">dig +tcp</code> or the Python DoH test in Step 2 to verify the server is working. The Windows DoH script is unaffected — it uses HTTPS port 8443 which bypasses the hijack.</span>
         </div>
       </li>
     </ul>
